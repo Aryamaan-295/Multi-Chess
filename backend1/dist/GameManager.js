@@ -15,11 +15,26 @@ class GameManager {
     }
     removeUser(socket) {
         this.users = this.users.filter(user => user !== socket);
-        // Stop the game here as the user left
+        // Optionally handle removing or marking a user as disconnected, but keep game state
     }
     addHandler(socket) {
         socket.on('message', (data) => {
+            var _a;
             const message = JSON.parse(data.toString());
+            if (message.type === messages_1.RECONNECT && ((_a = message.payload) === null || _a === void 0 ? void 0 : _a.sessionId)) {
+                const sessionId = message.payload.sessionId;
+                const game = this.games.find(game => game.sessionId1 === sessionId || game.sessionId2 === sessionId);
+                if (game) {
+                    if (game.sessionId1 === sessionId) {
+                        game.player1 = socket;
+                    }
+                    else if (game.sessionId2 === sessionId) {
+                        game.player2 = socket;
+                    }
+                    console.log('Player reconnected:', sessionId);
+                    return;
+                }
+            }
             if (message.type === messages_1.INIT_GAME) {
                 if (this.pendingUser) {
                     const game = new Game_1.Game(this.pendingUser, socket);

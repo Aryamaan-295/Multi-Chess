@@ -1,24 +1,41 @@
 import { useEffect, useState } from "react";
 
-const WS_URL = "ws://localhost:8080";
+export function useSocket(): WebSocket | null {
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
-export const useSocket = () => {
-    const [socket, setSocket] = useState<WebSocket | null>(null);
+  useEffect(() => {
+    let ws: WebSocket;
+    let shouldReconnect = true;
 
-    useEffect(() => {
-        const ws = new WebSocket(WS_URL);
-        ws.onopen = () => {
-            setSocket(ws);
+    const connect = () => {
+      ws = new WebSocket("ws://localhost:8080");
+
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+        setSocket(ws);
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket closed");
+        // If the component is still mounted, attempt reconnect
+        if (shouldReconnect) {
+          console.log("Attempting to reconnect in 1 second...");
+          setTimeout(connect, 1000);
         }
+      };
 
-        ws.onclose = () => {
-            setSocket(null);
-        }
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+    };
 
-        return () => {
-            ws.close();
-        }
-    }, [])
+    connect();
 
-    return socket;
+    return () => {
+      shouldReconnect = false;
+      ws.close();
+    };
+  }, []);
+
+  return socket;
 }

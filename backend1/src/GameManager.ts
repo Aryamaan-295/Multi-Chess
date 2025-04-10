@@ -1,48 +1,62 @@
 import { WebSocket } from "ws";
-import { INIT_GAME, MOVE } from "./messages";
+import { INIT_GAME, MOVE, RECONNECT } from "./messages";
 import { Game } from "./Game";
 
 export class GameManager {
-    private games: Game[];
-    private pendingUser: WebSocket | null;
-    private users: WebSocket[];
+  private games: Game[];
+  private pendingUser: WebSocket | null;
+  private users: WebSocket[];
 
-    constructor() {
-        this.games = [];
-        this.pendingUser = null;
-        this.users = [];
-    }
+  constructor() {
+    this.games = [];
+    this.pendingUser = null;
+    this.users = [];
+  }
 
-    addUser(socket: WebSocket) {
-        this.users.push(socket);
-        this.addHandler(socket);
-    }
+  addUser(socket: WebSocket) {
+    this.users.push(socket);
+    this.addHandler(socket);
+  }
 
-    removeUser(socket: WebSocket) {
-        this.users = this.users.filter(user => user !== socket);
-        // Stop the game here as the user left
-    }
+  removeUser(socket: WebSocket) {
+    this.users = this.users.filter(user => user !== socket);
+    // Optionally handle removing or marking a user as disconnected, but keep game state
+  }
 
-    private addHandler(socket: WebSocket) {
-        socket.on('message', (data) => {
-            const message = JSON.parse(data.toString());
+  private addHandler(socket: WebSocket) {
+    socket.on('message', (data) => {
+      const message = JSON.parse(data.toString());
 
-            if (message.type === INIT_GAME) {
-                if (this.pendingUser) {
-                    const game = new Game(this.pendingUser, socket);
-                    this.games.push(game);
-                    this.pendingUser = null;
-                } else {
-                    this.pendingUser = socket;
-                }
-            }
+      if (message.type === RECONNECT && message.payload?.sessionId) {
+        const sessionId = message.payload.sessionId;
+        const game = this.games.find(game => game.sessionId1 === sessionId || game.sessionId2 === sessionId);
+        if (game) {
+          if (game.sessionId1 === sessionId) {
+            game.player1 = socket;
+          } else if (game.sessionId2 === sessionId) {
+            game.player2 = socket;
+          }
+          console.log('Player reconnected:', sessionId);
+          return;
+        }
+      }
 
-            if (message.type === MOVE) {
-                const game = this.games.find(game => game.player1 === socket || game.player2 === socket);
-                if (game) {
-                    game.makeMove(socket, message.payload.move);
-                }
-            }
-        })
-    }
+      if (message.type === INIT_GAME) {
+        if (this.pendingUser) {
+          const game = new Game(this.pendingUser, socket);
+          this.games.push(game);
+          this.pendingUser = null;
+        } else {
+          this.pendingUser = socket;
+        }
+      }
+
+      if (message.type === MOVE) {
+        const game = this.games.find(game => game.player1 === socket || game.player2 === socket);
+        if (game) {
+          game.makeMove(socket, message.payload.move);
+        }
+      }
+    });
+  }
 }
